@@ -1,0 +1,33 @@
+unit varios;
+
+interface
+
+uses System.DateUtils, System.SysUtils, DB, System.JSON ;
+procedure SetParametroAuto(Body: TJSONObject; const Parametro: string; Param: TParam);
+implementation
+
+procedure SetParametroAuto(Body: TJSONObject; const Parametro: string; Param: TParam);
+var
+  ValueStr: string;
+begin
+  if Body.TryGetValue<string>(Parametro, ValueStr) then
+  begin
+    case Param.DataType of
+      ftString, ftWideString:
+        Param.AsString := ValueStr;
+      ftInteger, ftSmallint, ftWord:
+        Param.AsInteger := StrToIntDef(ValueStr, 0);
+      ftBoolean:
+        Param.AsBoolean := SameText(ValueStr, 'true') or (ValueStr = '1');
+      ftDate, ftTime, ftDateTime:
+        Param.AsDateTime := ISO8601ToDate(ValueStr, True); // <-- necesita System.DateUtils
+      else
+        raise Exception.Create('Tipo de parámetro no soportado automáticamente.');
+    end;
+  end
+  else
+    Param.Clear;
+end;
+
+
+end.

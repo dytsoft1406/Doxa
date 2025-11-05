@@ -1,0 +1,106 @@
+unit dm;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
+  FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt, FireDAC.UI.Intf,
+  FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.Phys.SQLite,
+  FireDAC.Phys.SQLiteDef, FireDAC.Stan.ExprFuncs,
+  FireDAC.Phys.SQLiteWrapper.Stat, FireDAC.VCLUI.Wait, Data.DB,
+  FireDAC.Comp.Client, FireDAC.Comp.DataSet, Dataset.Serialize, DataSet.Serialize.Config,
+  Horse ;
+
+type
+  Tdatos = class(TDataModule)
+    Conexion: TFDConnection;
+    FDPhysSQLiteDriverLink1: TFDPhysSQLiteDriverLink;
+    procedure DataModuleCreate(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+
+    function CrearQuery: TFDQuery;
+    procedure IniciarTransaccion;
+    procedure ConfirmarTransaccion;
+    procedure RevertirTransaccion;
+    function ObtenerUltimoIDGenerado: Integer;
+  end;
+
+var
+  datos: Tdatos;
+
+implementation
+
+{%CLASSGROUP 'Vcl.Controls.TControl'}
+
+{$R *.dfm}
+
+
+
+procedure Tdatos.DataModuleCreate(Sender: TObject);
+begin
+Conexion.Connected := False;
+try
+  TDatasetSerializeConfig.GetInstance.CaseNameDefinition := cndLower;
+  TDatasetSerializeConfig.GetInstance.Import.DecimalSeparator := '.';
+   // Configuración básica de la conexión
+    Conexion.DriverName := 'SQLite';
+    Conexion.Params.Values['Database'] := 'C:\Users\Carlos\Documents\Embarcadero\Studio\Projects\Doxa\BD\doxa.db';
+    Conexion.Params.Values['LockingMode'] := 'Normal';
+    Conexion.Params.Values['OpenMode'] := 'ReadWrite';
+    Conexion.Params.Values['SQLiteAdvanced'] := 'PageSize=4096';
+
+    // Configuración para mejor rendimiento
+    Conexion.Params.Values['SharedCache'] := 'False';
+    Conexion.Params.Values['Synchronous'] := 'Normal';
+    Conexion.Params.Values['JournalMode'] := 'WAL';
+
+
+   Conexion.Connected := True;
+except
+  on E: Exception do
+     raise Exception.Create('Error al conectar a la base de datos: ' + E.Message);
+end;
+end;
+
+
+function Tdatos.CrearQuery: TFDQuery;
+begin
+  Result := TFDQuery.Create(nil);
+  Result.Connection := Conexion;
+end;
+
+procedure Tdatos.IniciarTransaccion;
+begin
+  Conexion.StartTransaction;
+end;
+
+procedure Tdatos.ConfirmarTransaccion;
+begin
+  Conexion.Commit;
+end;
+
+procedure Tdatos.RevertirTransaccion;
+begin
+  Conexion.Rollback;
+end;
+
+function Tdatos.ObtenerUltimoIDGenerado: Integer;
+begin
+  // Para SQLite
+  Result := Conexion.ExecSQLScalar('SELECT last_insert_rowid()');
+
+  // Para MySQL/MariaDB usar:
+  // Result := Conexion.ExecSQLScalar('SELECT LAST_INSERT_ID()');
+
+  // Para SQL Server usar:
+  // Result := Conexion.ExecSQLScalar('SELECT SCOPE_IDENTITY()');
+
+  // Para PostgreSQL usar:
+  // Result := Conexion.ExecSQLScalar('SELECT LASTVAL()');
+end;
+
+end.

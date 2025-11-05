@@ -1,0 +1,75 @@
+unit dm;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
+  FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt, FireDAC.UI.Intf,
+  FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.Phys.SQLite,
+  FireDAC.Phys.SQLiteDef, FireDAC.Stan.ExprFuncs,
+  FireDAC.Phys.SQLiteWrapper.Stat, FireDAC.VCLUI.Wait, Data.DB,
+  FireDAC.Comp.Client, FireDAC.Comp.DataSet, Dataset.Serialize, DataSet.Serialize.Config,
+  Horse ;
+
+type
+  Tdatos = class(TDataModule)
+    Conexion: TFDConnection;
+    FDPhysSQLiteDriverLink1: TFDPhysSQLiteDriverLink;
+    procedure DataModuleCreate(Sender: TObject);
+    procedure ConexionBeforeConnect(Sender: TObject);
+  private
+    procedure CargarConexion(conexion : TFDConnection) ;
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  datos: Tdatos;
+
+implementation
+
+{%CLASSGROUP 'Vcl.Controls.TControl'}
+
+{$R *.dfm}
+
+procedure Tdatos.CargarConexion(conexion: TFDConnection);
+begin
+   conexion.DriverName := 'SQLite' ;
+
+   with conexion.Params do
+    begin
+      clear ;
+      Add('DriverID=SQLite');
+      Add('DataBase=C:\Users\Carlos\Documents\Embarcadero\Studio\Projects\Doxa\BD\doxa.db' );
+      Add('UserName=');
+      Add('Password=');
+      Add('Port=');
+      Add('Server=');
+      Add('Protocol=');
+      Add('LockingMode=Normal');
+    end;
+end;
+
+procedure Tdatos.ConexionBeforeConnect(Sender: TObject);
+begin
+ CargarConexion(Conexion) ;
+end;
+
+procedure Tdatos.DataModuleCreate(Sender: TObject);
+var n : string;
+begin
+Conexion.Connected := False;
+try
+  TDatasetSerializeConfig.GetInstance.CaseNameDefinition := cndLower;
+  TDatasetSerializeConfig.GetInstance.Import.DecimalSeparator := '.';
+  Conexion.Connected := True;
+  Writeln('Conectado al puerto: '+ tHorse.Port.ToString) ;
+except
+  on E: Exception do
+    Writeln('Error de conexión: ' + E.Message );
+end;
+end;
+
+end.

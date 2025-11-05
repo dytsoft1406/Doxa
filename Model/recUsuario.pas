@@ -1,0 +1,54 @@
+unit recUsuario;
+
+interface
+uses
+  System.SysUtils, System.JSON, System.DateUtils;
+
+  type
+  TUsuario = record
+    ID: Integer;
+    Nombre: string;
+    Apellido: string;
+    Email: string;
+    PasswordHash: string;
+    Salt: string;
+    Rol: string;
+    Activo: Boolean;
+    FechaCreacion: TDateTime;
+
+    function ToJson: TJSONObject;
+    procedure FromJson(const AJson: TJSONObject);
+  end;
+
+implementation
+
+function TUsuario.ToJson: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('ID', TJSONNumber.Create(ID));
+  Result.AddPair('Nombre', Nombre);
+  Result.AddPair('Apellido', Apellido);
+  Result.AddPair('Email', Email);
+  // Por seguridad no mandes PasswordHash ni Salt en la respuesta
+  Result.AddPair('Rol', Rol);
+  Result.AddPair('Activo', TJSONBool.Create(Activo));
+  Result.AddPair('FechaCreacion', TJSONString.Create(DateToISO8601(FechaCreacion)));
+end;
+
+procedure TUsuario.FromJson(const AJson: TJSONObject);
+begin
+  if Assigned(AJson) then
+  begin
+    ID := AJson.GetValue<Integer>('ID', 0);
+    Nombre := AJson.GetValue<string>('Nombre', '');
+    Apellido := AJson.GetValue<string>('Apellido', '');
+    Email := AJson.GetValue<string>('Email', '');
+    PasswordHash := AJson.GetValue<string>('PasswordHash', '');
+    Salt := AJson.GetValue<string>('Salt', '');
+    Rol := AJson.GetValue<string>('Rol', '');
+    Activo := AJson.GetValue<Boolean>('Activo', True);
+    FechaCreacion := ISO8601ToDate(AJson.GetValue<string>('FechaCreacion', ''));
+  end;
+end;
+
+end.

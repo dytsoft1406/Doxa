@@ -1,0 +1,46 @@
+unit varios;
+
+interface
+
+uses System.DateUtils, System.Classes, System.SysUtils, DB, System.JSON, FireDAC.Stan.Param;
+
+procedure SetParametroAuto(Body: TJSONObject; const Parametro: string; Param: TFDParam);
+
+
+implementation
+
+procedure SetParametroAuto(Body: TJSONObject; const Parametro: string; Param: TFDParam);
+var
+  ValueStr: string;
+  ValueDate: TDateTime ;
+begin
+  if Body.TryGetValue<string>(Parametro, ValueStr) then
+  begin
+ // Asignamos según el tipo de dato del parámetro
+    if Param.DataType = ftString then
+    begin
+      Param.AsString := ValueStr;
+    end
+    else if Param.DataType = ftInteger then
+    begin
+      Param.AsInteger := StrToIntDef(ValueStr, 0);
+    end
+    else if Param.DataType = ftBoolean then
+    begin
+      Param.AsBoolean := SameText(ValueStr, 'true') or (ValueStr = '1');
+    end
+    else if (Param.DataType = ftDate) or (Param.DataType = ftDateTime) then
+    begin
+      // Si es una fecha, la convertimos a TDateTime
+      ValueDate := ISO8601ToDate(ValueStr, True);
+      Param.AsDateTime := ValueDate;
+    end
+    else
+      raise Exception.CreateFmt('Tipo de parámetro "%s" no soportado automáticamente.', [Parametro]);
+  end
+  else
+    Param.Clear;
+end;
+
+
+end.

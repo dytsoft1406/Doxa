@@ -1,0 +1,311 @@
+unit uMedicamento;
+
+interface
+uses
+ Horse, System.JSON, FireDAC.comp.client, System.SysUtils, System.DateUtils, System.Classes, Horse.Jhonson,
+ FireDAC.Stan.Intf,
+  FireDAC.Stan.Param,
+  FireDAC.DApt,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Def,
+  FireDAC.Stan.Async,
+  FireDAC.UI.Intf,
+  FireDAC.VCLUI.Wait,
+  Data.DB, StrUtils;
+
+  procedure abmMedicamento ;
+
+implementation
+
+uses recMedicamento, dm, varios;
+
+
+procedure GetMedicamentosID(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+var
+  medicamento: TMedicamento;
+  SQLMed: TFDQuery;
+  idMedicamento: Integer;
+begin
+  SQLMed := datos.CrearQuery;
+  try
+    try
+      if not TryStrToInt(Req.Params['id'], idMedicamento) then
+        raise Exception.Create('ID inválido');
+
+      SQLMed.SQL.Text := 'SELECT * FROM Medicamentos WHERE ID = :ID';
+      SQLMed.ParamByName('ID').AsInteger := idMedicamento;
+      SQLMed.Open;
+
+      if SQLMed.IsEmpty then
+        raise Exception.Create('Medicamento no encontrado');
+
+      medicamento.ID := SQLMed.FieldByName('ID').AsInteger;
+      medicamento.Nombre := SQLMed.FieldByName('Nombre').AsString;
+      medicamento.Descripcion := SQLMed.FieldByName('Descripcion').AsString;
+      medicamento.UnidadMedida := SQLMed.FieldByName('UnidadMedida').AsString;
+      medicamento.MinimoStock := SQLMed.FieldByName('MinimoStock').AsInteger;
+      medicamento.CodigoBarras := SQLMed.FieldByName('CodigoBarras').AsString;
+      medicamento.Categoria := SQLMed.FieldByName('Categoria').AsString;
+      medicamento.RequiereRefrigeracion := SQLMed.FieldByName('RequiereRefrigeracion').AsBoolean;
+
+      Res.Send<TJSONObject>(medicamento.ToJson);
+    except
+      on E: Exception do
+        Res.Status(THTTPStatus.InternalServerError).Send('Error: ' + E.Message);
+    end;
+  finally
+    SQLMed.Free;
+  end;
+end;
+
+
+procedure GetMedicamentos(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+var medicamento : TMedicamento ;
+    SQLMed    : TFDQuery ;
+    lista     : TJSONArray ;
+begin
+
+ lista := TJSONArray.Create ;
+ SQLMed := datos.CrearQuery ;
+ try
+    try
+      SQLMed.SQL.Text := 'SELECT * from Medicamentos LIMIT 100 OFFSET 0' ;
+      SQLMed.open ;
+
+      while not SQLMed.Eof do
+         begin
+           medicamento.ID := SQLMed.FieldByName('ID').AsInteger;
+           medicamento.Nombre := SQLMed.FieldByName('Nombre').AsString;
+           medicamento.Descripcion := SQLMed.FieldByName('Descripcion').AsString;
+           medicamento.UnidadMedida := SQLMed.FieldByName('UnidadMedida').AsString;
+           medicamento.MinimoStock := SQLMed.FieldByName('MinimoStock').AsInteger;
+           medicamento.CodigoBarras := SQLMed.FieldByName('CodigoBarras').AsString;
+           medicamento.Categoria := SQLMed.FieldByName('Categoria').AsString;
+           medicamento.RequiereRefrigeracion := SQLMed.FieldByName('RequiereRefrigeracion').AsBoolean;
+
+           lista.AddElement(medicamento.ToJson);
+           SQLMed.Next ;
+         end;
+
+      Res.Send<TJSONArray>(lista);
+
+    except
+      on E : Exception do
+        Res.Status(THTTPStatus.InternalServerError).Send('Error: ' + E.Message);
+    end;
+
+ finally
+   FreeAndNil(SQLMed) ;
+   //FreeAndNil(lista) ;
+ end;
+
+end;
+
+procedure postMedicamentos(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+var body : TJSONObject ;
+    medicamento : TMedicamento ;
+    SQLMed, SQLVerificar  : TFDQuery ;
+    existeDuplicado : Boolean ;
+BEGIN
+ body := nil ;
+ SQLMed := datos.CrearQuery ;
+ SQLVerificar := datos.CrearQuery ;
+
+ try
+     try
+         body := Req.Body<TJSONObject> ;
+         medicamento.FromJson(body);
+
+         //validacion de campos
+         if Trim(medicamento.Nombre) = '' then
+            raise Exception.Create('Error: El nombre es obigatorio');
+
+         if not MatchStr(medicamento.UnidadMedida.ToLower, ['unidades', 'mg', 'ml', 'viales']) then
+            raise Exception.CreateFmt('La unidad "%s", no es valida. Utilice unidades, mg, ml o viales', [medicamento.UnidadMedida]);
+
+         if medicamento.MinimoStock < 0 then
+            raise Exception.Create('El stock mínimo no puede ser negativo');
+
+         // 3. Verificación de duplicados
+         SQLVerificar.SQL.Text :=
+           'SELECT 1 FROM Medicamentos WHERE Nombre = :Nombre OR CodigoBarras = :CodigoBarras LIMIT 1';
+         SQLVerificar.ParamByName('Nombre').AsString := medicamento.Nombre;
+         SQLVerificar.ParamByName('CodigoBarras').AsString := medicamento.CodigoBarras;
+         SQLVerificar.Open;
+         existeDuplicado := not SQLVerificar.Eof;
+         SQLVerificar.Close;
+
+         if existeDuplicado then
+           raise Exception.Create('Ya existe un medicamento con el mismo nombre o código de barras');
+
+         datos.IniciarTransaccion ;
+           try
+           SQLMed.SQL.Text := 'INSERT INTO Medicamentos (Nombre, Descripcion, UnidadMedida, MinimoStock, CodigoBarras, Categoria, RequiereRefrigeracion) ' +
+                'VALUES (:Nombre, :Descripcion, :UnidadMedida, :MinimoStock, :CodigoBarras, :Categoria, :RequiereRefrigeracion)';
+           SQLMed.ParamByName('Nombre').AsString := medicamento.Nombre;
+           SQLMed.ParamByName('Descripcion').AsString := medicamento.Descripcion;
+           SQLMed.ParamByName('UnidadMedida').AsString := medicamento.UnidadMedida;
+           SQLMed.ParamByName('MinimoStock').AsInteger := medicamento.MinimoStock;
+           SQLMed.ParamByName('CodigoBarras').AsString := medicamento.CodigoBarras;
+           SQLMed.ParamByName('Categoria').AsString := medicamento.Categoria;
+           SQLMed.ParamByName('RequiereRefrigeracion').AsBoolean := medicamento.RequiereRefrigeracion;
+
+           SQLMed.ExecSQL ;
+
+              // Obtener ID generado
+           medicamento.ID := datos.ObtenerUltimoIDGenerado;
+
+           datos.ConfirmarTransaccion;
+            Res.Status(THTTPStatus.Created).Send<TJSONObject>(medicamento.ToJson);
+           except
+            on E: Exception do
+            begin
+              datos.RevertirTransaccion;
+              Res.Status(THTTPStatus.BadRequest).Send('Error al guardar medicamento: ' + E.Message);
+            end;
+
+           end;
+     except
+       on E: Exception do
+        Res.Status(THTTPStatus.BadRequest).Send('JSON inválido: ' + E.Message);
+
+     end;
+ finally
+   begin
+    FreeAndNil(SQLMed) ;
+    FreeAndNil(SQLVerificar)   ;
+    //FreeAndNil(body) ;
+   end;
+ end;
+
+END;
+
+procedure putMedicamentos(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+var sqlEdit  : TFDQuery ;
+    body : TJSONObject ;
+    Nombre, Descripcion, UnidadMedida, CodigoBarrar, Categoria : String ;
+    MinimoStock, ID : Integer ;
+    RequiereRefrigeracion : Boolean ;
+begin
+  ID := Req.Params['ID'].ToInteger ;
+  body := Req.Body<TJSONObject> ;
+   sqlEdit := datos.CrearQuery ;
+
+  try
+      try
+       sqlEdit.SQL.Text := 'SELECT * FROM Medicamentos WHERE ID = :ID';
+       sqlEdit.ParamByName('ID').AsInteger := ID ;
+       sqlEdit.Open ;
+
+       if sqlEdit.IsEmpty then
+          begin
+           Res.Status(THTTPStatus.NotFound).Send('No existe el medicamento') ;
+           Exit  ;
+          end;
+
+
+       //ejecuta la actualizacion de los datos
+       datos.IniciarTransaccion ;
+       sqlEdit.SQL.Text :=
+       'UPDATE Medicamentos SET '+
+       'Nombre                = COALESCE(:nombre, Nombre), ' +
+       'Descripcion           = COALESCE(:descripcion, Descripcion), ' +
+       'UnidadMedida          = COALESCE(:UnidadMedida, UnidadMedida), ' +
+       'MinimoStock           = COALESCE(:minimostock, MinimoStock), ' +
+       'CodigoBarras          = COALESCE(:codigobarras, CodigoBarras), ' +
+       'Categoria             = COALESCE(:categoria, Categoria), ' +
+       'RequiereRefrigeracion = COALESCE(:requiererefrigeracion, RequiereRefrigeracion) ' +
+       'WHERE ID = :id' ;
+
+       sqlEdit.ParamByName('ID').AsInteger := ID ;
+       //false determinar el tipo de los datos para poder usar la funcion setparametroauto
+       sqlEdit.ParamByName('Nombre').DataType := ftString ;
+       sqlEdit.ParamByName('Descripcion').DataType := ftString ;
+       sqlEdit.ParamByName('UnidadMedida').DataType := ftString ;
+       sqlEdit.ParamByName('MinimoStock').DataType := ftInteger ;
+       sqlEdit.ParamByName('CodigoBarras').DataType := ftString ;
+       sqlEdit.ParamByName('Categoria').DataType := ftString ;
+       sqlEdit.ParamByName('RequiereRefrigeracion').DataType := ftBoolean ;
+
+
+      //si no modifica todos los campos quedan como estan
+          //nombre
+
+       SetParametroAuto(body, 'Nombre', sqlEdit.ParamByName('Nombre')) ;
+       SetParametroAuto(body, 'Descripcion', sqlEdit.ParamByName('Descripcion')) ;
+       SetParametroAuto(body, 'UnidadMedida', sqlEdit.ParamByName('UnidadMedida')) ;
+       SetParametroAuto(body, 'MinimoStock', sqlEdit.ParamByName('MinimoStock')) ;
+       SetParametroAuto(body, 'CodigoBarras', sqlEdit.ParamByName('CodigoBarras')) ;
+       SetParametroAuto(body, 'Categoria', sqlEdit.ParamByName('Categoria')) ;
+       SetParametroAuto(body, 'RequiereRefrigeracion', sqlEdit.ParamByName('RequiereRefrigeracion')) ;
+
+       sqlEdit.ExecSQL ;
+
+       datos.ConfirmarTransaccion ;
+       Res.Status(THTTPStatus.OK).Send('El medicamento ha sido modificado satisfactoriamente') ;
+      except
+         on E: Exception do
+         begin
+           datos.RevertirTransaccion ;
+           res.Status(THTTPStatus.BadRequest).Send('Error al editar el medicamento: '+ E.Message);
+         end;
+      end;
+
+
+  finally
+    FreeAndNil(sqlEdit) ;
+  end;
+
+
+end;
+
+procedure delMedicamentos(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+var ID : Integer ;
+    sqlDel : TFDQuery ;
+    nombreMed : string ;
+begin
+ ID := Req.Params['ID'].ToInteger ;
+ sqlDel := datos.CrearQuery ;
+ try
+    sqlDel.SQL.Text := 'SELECT * FROM Medicamentos WHERE ID = :ID';
+    sqlDel.ParamByName('ID').AsInteger := ID ;
+    sqlDel.Open ;
+
+    if sqlDel.IsEmpty then
+       begin
+         Res.Status(THTTPStatus.NotFound).Send('No existe el medicamento') ;
+         Exit  ;
+       end;
+
+    nombreMed := sqlDel.FieldByName('Nombre').AsString ;
+
+    sqlDel.Close ;
+    datos.IniciarTransaccion ;
+    sqlDel.SQL.Text := 'DELETE From Medicamentos WHERE ID = :ID' ;
+    sqlDel.ParamByName('ID').AsInteger := ID ;
+    sqlDel.ExecSQL ;
+
+    datos.ConfirmarTransaccion ;
+    Res.Status(THTTPStatus.OK).Send('El medicamento '+nombreMed+' ha sido eliminado correctamente') ;
+
+ Except
+   on E : Exception do
+   begin
+    datos.RevertirTransaccion ;
+    Res.Status(THTTPStatus.InternalServerError).Send('Error inesperado: '+ E.Message)  ;
+   end;
+ end;
+
+end;
+
+procedure abmMedicamento ;
+begin
+  THorse.Get('/medicamentos', GetMedicamentos)  ;
+  THorse.get('/medicamentos/:Id', GetMedicamentosID) ;
+  THorse.Post('/medicamentos', postMedicamentos) ;
+  THorse.Put('/medicamentos/:Id', putMedicamentos);
+  THorse.Delete('/medicamentos/:Id', delMedicamentos)  ;
+
+end;
+
+end.

@@ -1,0 +1,23 @@
+object datos: Tdatos
+  OnCreate = DataModuleCreate
+  Height = 201
+  Width = 257
+  object Conexion: TFDConnection
+    Params.Strings = (
+      
+        'Database=C:\Users\Carlos\Documents\Embarcadero\Studio\Projects\D' +
+        'oxa\BD\doxa.db'
+      'LockingMode=Normal'
+      'DriverID=SQLite')
+    UpdateOptions.AssignedValues = [uvAutoCommitUpdates]
+    ConnectedStoredUsage = []
+    LoginPrompt = False
+    BeforeConnect = ConexionBeforeConnect
+    Left = 104
+    Top = 112
+  end
+  object FDPhysSQLiteDriverLink1: TFDPhysSQLiteDriverLink
+    Left = 104
+    Top = 16
+  end
+end

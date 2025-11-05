@@ -1,0 +1,59 @@
+unit recMedicamento;
+
+interface
+uses
+  System.SysUtils, System.JSON;
+
+type
+  TMedicamento = record
+    ID: Integer;
+    Nombre: string;
+    Descripcion: string;
+    UnidadMedida: string;
+    MinimoStock: Integer;
+    CodigoBarras: string;
+    Categoria: string;
+    RequiereRefrigeracion: Boolean;
+
+    function ToJson: TJSONObject;
+    procedure FromJson(const AJson: TJSONObject);
+  end;
+
+implementation
+{TMedicamento}
+
+function TMedicamento.ToJson: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  try
+    Result.AddPair('ID', TJSONNumber.Create(ID));
+    Result.AddPair('Nombre', Nombre);
+    Result.AddPair('Descripcion', Descripcion);
+    Result.AddPair('UnidadMedida', UnidadMedida);
+    Result.AddPair('MinimoStock', TJSONNumber.Create(MinimoStock));
+    Result.AddPair('CodigoBarras', CodigoBarras);
+    Result.AddPair('Categoria', Categoria);
+    Result.AddPair('RequiereRefrigeracion', TJSONBool.Create(RequiereRefrigeracion));
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure TMedicamento.FromJson(const AJson: TJSONObject);
+begin
+  if Assigned(AJson) then
+  begin
+    ID := AJson.GetValue<Integer>('ID', 0);
+    Nombre := AJson.GetValue<string>('Nombre', '');
+    Descripcion := AJson.GetValue<string>('Descripcion', '');
+    UnidadMedida := AJson.GetValue<string>('UnidadMedida', '');
+    MinimoStock := AJson.GetValue<Integer>('MinimoStock', 5);
+    CodigoBarras := AJson.GetValue<string>('CodigoBarras', '');
+    Categoria := AJson.GetValue<string>('Categoria', '');
+    RequiereRefrigeracion := AJson.GetValue<Boolean>('RequiereRefrigeracion', False);
+  end;
+end;
+
+
+end.
